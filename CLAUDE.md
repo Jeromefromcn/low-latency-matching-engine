@@ -25,6 +25,7 @@ The audience is engineers at Hong Kong banks and trading firms. Code, docs, comm
 
 ## Workflow rules
 
+- Never start a task marked Conditional in `docs/ROADMAP.md` without explicit approval from the user in the current session.
 - Work on **one ROADMAP task at a time**. When a task is done and its acceptance criteria are verified, tick its checkbox in `docs/ROADMAP.md` in the same commit.
 - A task is not done until its acceptance criteria are **demonstrated**, not just implemented. If a criterion cannot be verified in the current environment (e.g. it needs the benchmark machine), say so explicitly and leave the box unticked.
 - Any new significant technical decision (library choice, threading model, data layout, protocol) gets a new ADR in `docs/adr/` using the next number. Do not silently reverse an existing ADR — write a new one that supersedes it.
@@ -80,6 +81,12 @@ Claims of "zero allocation" must be backed by at least one of:
   CPUs 1–3 are isolated (`isolcpus`, `nohz_full`, `rcu_nocbs`). Thread pinning is done explicitly in code/config, never left to the scheduler.
 - **Development:** any machine. Unit tests, correctness tests and JMH smoke runs are fine anywhere; headline latency numbers are not.
 - **Monitoring:** Prometheus + Grafana exist on a separate host. They receive *summarised* metrics from the housekeeping thread only (ADR 0001).
+
+## Deployment
+
+- Hot-path processes (`engine-app`, `loadgen`, later `gateway-fix`) run as plain processes on the bare-metal benchmark machine, started by scripts/systemd, with explicit thread pinning (ADR 0004).
+- No Docker or Kubernetes on any path used for headline numbers.
+- Containers are fine for CI, correctness/integration tests and Phase 6 cluster functional tests; their latency numbers are labelled `exploratory`.
 
 ## Tech stack
 

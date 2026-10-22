@@ -2,9 +2,30 @@
 
 Each task has an ID, a deliverable and **acceptance criteria that must be demonstrated** before the box is ticked. Results referenced here live under `bench/`.
 
-Target pace: Phases 0–3 in ~4 weeks (CV-ready v0.1), Phases 4–5 in weeks 5–8, the rest afterwards.
+The roadmap has two tracks:
+
+- **Track A — Committed (weeks 1–4):** Phases 0–3, ending with the `v0.1` tag.
+- **Track B — Conditional:** Phases 4–8. Nothing in Track B starts without an explicit go-ahead (see [Decision point after v0.1](#decision-point-after-v01)).
+
+Task IDs are stable. Sections appear in **execution order**, not numeric order.
 
 ---
+
+# Track A — Committed (weeks 1–4)
+
+Execution order:
+
+| Order | Tasks | Where | Results labelled |
+|---|---|---|---|
+| 1 | Phase 0 (0.1–0.4) — bootstrap and walking skeleton | any machine | exploratory |
+| 2 | Phase 2 — core matching engine | any machine | exploratory |
+| 3 | Phase 3 (3.1–3.7) — pipeline and measurement | any machine | exploratory |
+| 4 | Phase 1 — benchmark machine and platform baseline (one weekend) | benchmark machine | headline |
+| 5 | 3.8 — v0.1 benchmark report, tag `v0.1` | benchmark machine | headline |
+
+Rationale: everything up to 3.7 is either hardware-independent (correctness, allocation rate, GC count) or only needs to work end-to-end, so it is built on a development machine first. The benchmark machine is needed only for the platform baseline and the headline numbers. Task 1.0 (battery safety check) is the one exception and should be done as early as possible.
+
+Development-machine results follow `docs/benchmark-methodology.md` §6: labelled `exploratory`, never quoted as headline numbers.
 
 ## Phase 0 — Repository bootstrap
 
@@ -17,22 +38,12 @@ Target pace: Phases 0–3 in ~4 weeks (CV-ready v0.1), Phases 4–5 in weeks 5�
 - [ ] **0.3 Code style**
   - Formatter (e.g. Spotless) wired into the build.
   - ✅ `./gradlew spotlessCheck` runs in CI.
-
-## Phase 1 — Benchmark machine and platform baseline
-
-Procedure: `docs/runbooks/01-platform-setup.md`.
-
-- [ ] **1.1 Hardware check** — battery removed or confirmed healthy; thermal paste refreshed.
-  - ✅ 30-minute `stress-ng` on all cores holds the locked base frequency with no thermal throttling (`turbostat` log committed).
-- [ ] **1.2 OS install** — Ubuntu Server 24.04, headless, wired network, JDK 25, rt-tests, linux-tools, stress-ng, jHiccup, HdrHistogram.
-  - ✅ `collect-env.sh` output committed.
-- [ ] **1.3 Baseline A (untuned)**
-  - ✅ `bench/platform/A-*/` contains hwlatdetect, cyclictest and jHiccup results + env.
-- [ ] **1.4 Tuning applied** — `setup-tuning.sh apply`, reboot.
-  - ✅ `/proc/cmdline` shows isolation parameters; `lscpu` shows 4 online CPUs; frequency locked.
-- [ ] **1.5 Baseline B (tuned)** — identical commands to 1.3.
-  - ✅ `bench/platform/B-*/` committed.
-- [ ] **1.6 Platform report** — `bench/platform/README.md` with A vs B comparison (p99, p99.9, max) and the plot from `plot_baseline.py`; SMI findings stated honestly.
+- [ ] **0.4 Walking skeleton (end-to-end, no matching logic)**
+  - Constant-rate loadgen → inbound ring buffer → stub engine (acknowledges every message, no book) → outbound ring buffer; `nanoTime` stamps recorded into per-thread HdrHistograms; housekeeping thread writes `.hlog` and exports summaries to Prometheus; one Grafana panel.
+  - Idle strategy and CPU affinity are configurable from the start: the development profile uses a non-spinning idle strategy and no pinning; the benchmark profile uses busy-spin and the core allocation in `CLAUDE.md`.
+  - Purpose: prove the wiring and the measurement/monitoring chain before any engine logic exists. Tasks 3.1, 3.3, 3.4 and 3.5 later harden each piece to its own acceptance criteria.
+  - Any new dependency (e.g. a Prometheus client) needs approval first (`CLAUDE.md` → Workflow rules).
+  - ✅ A run on a development machine produces a `.hlog` under `bench/` (labelled `exploratory`) and the Grafana panel shows summaries from the same run.
 
 ## Phase 2 — Core matching engine (correctness first)
 
@@ -56,65 +67,111 @@ Procedure: `docs/runbooks/01-platform-setup.md`.
 - [ ] **2.7 Zero-allocation proof for engine-core**
   - ✅ JMH `-prof gc` shows ~0 B/op for add/cancel/match paths; result committed under `bench/jmh/`.
 
-## Phase 3 — Pipeline and measurement (→ v0.1, CV-ready)
+## Phase 3 — Pipeline and measurement (3.1–3.7 on any machine)
 
-- [ ] **3.1 Threaded pipeline** — inbound ring buffer → engine thread → outbound ring buffer (Agrona `OneToOneRingBuffer` or Aeron IPC; decision in ADR).
-  - ✅ Engine thread pinned to CPU 2; busy-spin idle strategy configurable.
+- [ ] **3.1 Threaded pipeline** — inbound ring buffer → engine thread → outbound ring buffer (Agrona `OneToOneRingBuffer` or Aeron IPC; decision in ADR). Replaces the 0.4 stub engine with the Phase 2 engine.
+  - ✅ Engine thread pinned to CPU 2 in the benchmark profile; busy-spin idle strategy configurable.
 - [ ] **3.2 Journal** — inbound messages persisted in sequence before/alongside processing (Aeron Archive or Chronicle Queue — decide via ADR).
   - ✅ Replay from journal reproduces state (re-uses 2.6 test).
 - [ ] **3.3 Stage timestamps + HdrHistogram** — per-stage `nanoTime` stamps (ingress, post-decode, post-match, egress) recorded into per-thread histograms; interval logs written by the housekeeping thread.
   - ✅ `.hlog` produced per run; recording itself verified allocation-free.
-- [ ] **3.4 Constant-rate load generator** — open model, configurable rate, intended-send-time based latency (corrects coordinated omission); pinned to CPU 1.
+- [ ] **3.4 Constant-rate load generator** — open model, configurable rate, intended-send-time based latency (corrects coordinated omission); pinned to CPU 1 in the benchmark profile.
   - ✅ Test showing latency is measured from *intended* send time.
 - [ ] **3.5 Monitoring bridge** — housekeeping thread exports summarised percentiles, throughput and GC counts to Prometheus; Grafana dashboard JSON committed.
   - ✅ Dashboard screenshot in docs; zero Prometheus calls reachable from the hot path (verified by a dependency/ArchUnit test).
 - [ ] **3.6 GC-free steady state**
-  - ✅ 10-minute run at target rate: GC log shows 0 collections after warm-up.
+  - ✅ 10-minute run at target rate: GC log shows 0 collections after warm-up. (GC count is hardware-independent; a development-machine run is acceptable, labelled `exploratory`.)
 - [ ] **3.7 Profiling evidence** — JFR recording and async-profiler flame graph of a steady-state run.
   - ✅ Committed under the run's `bench/` directory with a short analysis.
-- [ ] **3.8 v0.1 benchmark report** — headline numbers on the tuned machine at 2–3 message rates.
+
+## Phase 1 — Benchmark machine and platform baseline
+
+Procedure: `docs/runbooks/01-platform-setup.md`.
+
+**Time-box: one weekend** (scheduled for the end of week 4), except 1.0.
+
+> **Fallback.** If hardware problems (battery, BIOS, OS install) are not solved within the time-box, do not block on them: continue development on any machine, label all results `exploratory`, and complete the formal baseline (1.1–1.6) and headline numbers (3.8) later. In that case `v0.1` may be tagged with an exploratory-labelled report, and the headline report follows as a later release.
+
+- [ ] **1.0 Battery safety check — do as early as possible, independent of everything else** (runbook Step 1, items 2–4).
+  - ✅ Battery connector disconnected and battery inspected; if swollen, removed for good and the machine confirmed to boot on AC alone.
+- [ ] **1.1 Hardware check** — thermal paste refreshed, fans cleaned.
+  - ✅ 30-minute `stress-ng` on all cores holds the locked base frequency with no thermal throttling (`turbostat` log committed).
+- [ ] **1.2 OS install** — Ubuntu Server 24.04, headless, wired network, JDK 25, rt-tests, linux-tools, stress-ng, jHiccup, HdrHistogram.
+  - ✅ `collect-env.sh` output committed.
+- [ ] **1.3 Baseline A (untuned)**
+  - ✅ `bench/platform/A-*/` contains hwlatdetect, cyclictest and jHiccup results + env.
+- [ ] **1.4 Tuning applied** — `setup-tuning.sh apply`, reboot.
+  - ✅ `/proc/cmdline` shows isolation parameters; `lscpu` shows 4 online CPUs; frequency locked.
+- [ ] **1.5 Baseline B (tuned)** — identical commands to 1.3.
+  - ✅ `bench/platform/B-*/` committed.
+- [ ] **1.6 Platform report** — `bench/platform/README.md` with A vs B comparison (p99, p99.9, max) and the plot from `plot_baseline.py`; SMI findings stated honestly.
+
+## Release v0.1 (requires Phase 1)
+
+- [ ] **3.8 v0.1 benchmark report** — headline numbers on the tuned machine at 2–3 message rates, using the benchmark profile.
   - ✅ README table links to raw results. **Tag `v0.1`.**
+
+---
+
+# Decision point after v0.1
+
+After `v0.1` is tagged, use it in interviews before investing further.
+
+- **Continue with Track B** only if interview feedback shows demand for electronic-trading / low-latency skills.
+- **Otherwise stop at v0.1.** The repository is complete as it stands.
+
+The decision is recorded here (date and one-line reason) before any Track B task starts.
+
+---
+
+# Track B — Conditional
+
+**Every task in this track is Conditional — start only after explicit go-ahead** (see the decision point above and `CLAUDE.md` → Workflow rules).
+
+> **Out of scope for now.** Aeron Cluster (Phase 6), Maven parity (Phase 7), converting `setup-tuning.sh` to Ansible, and kernel bypass (Phase 8) stay in Track B and are not started as part of Track A, even if they look small.
 
 ## Phase 4 — Gateway, risk and market data
 
-- [ ] **4.1 FIX gateway (Artio)** — NewOrderSingle (35=D), OrderCancelRequest (35=F) in; ExecutionReport (35=8) out.
+- [ ] **4.1 FIX gateway (Artio)** — *Conditional — start only after explicit go-ahead.* NewOrderSingle (35=D), OrderCancelRequest (35=F) in; ExecutionReport (35=8) out.
   - ✅ Integration test with a FIX initiator; latency stage added to histograms.
-- [ ] **4.2 Pre-trade risk checks** — max order qty, max notional, price band, per-account position limit; allocation-free.
+- [ ] **4.2 Pre-trade risk checks** — *Conditional — start only after explicit go-ahead.* Max order qty, max notional, price band, per-account position limit; allocation-free.
   - ✅ Unit + property tests; JMH shows cost per check.
-- [ ] **4.3 Market data publisher** — incremental book updates + trades over Aeron UDP (multicast or unicast).
+- [ ] **4.3 Market data publisher** — *Conditional — start only after explicit go-ahead.* Incremental book updates + trades over Aeron UDP (multicast or unicast).
   - ✅ Subscriber rebuilds an identical book from the feed (differential test).
 
 ## Phase 5 — Platform tuning experiments
 
 Each experiment = one controlled variable, before/after results committed, conclusion in `bench/experiments/README.md`.
 
-- [ ] **5.1 Busy-spin vs yielding vs parking idle strategies**
-- [ ] **5.2 Thread affinity on vs off**
-- [ ] **5.3 isolcpus/nohz_full on vs off** (reuses Phase 1 kernels)
-- [ ] **5.4 Huge pages on vs off** for the journal/buffers
-- [ ] **5.5 GC choice** — ZGC vs G1 vs Epsilon (with allocation-free code)
-- [ ] **5.6 JIT warm-up** — latency over time from cold start; effect of warm-up strategy
-- [ ] **5.7 Power-loss recovery** — pull the plug mid-run; journal recovers to a consistent state.
-- [ ] **5.8 Kafka on the path** — replace the inbound handoff with a local Kafka broker under the same methodology; compare distributions (validates ADR 0002 with data).
+- [ ] **5.1 Busy-spin vs yielding vs parking idle strategies** — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.2 Thread affinity on vs off** — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.3 isolcpus/nohz_full on vs off** (reuses Phase 1 kernels) — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.4 Huge pages on vs off** for the journal/buffers — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.5 GC choice** — ZGC vs G1 vs Epsilon (with allocation-free code) — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.6 JIT warm-up** — latency over time from cold start; effect of warm-up strategy — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.7 Power-loss recovery** — pull the plug mid-run; journal recovers to a consistent state — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.8 Kafka on the path** — replace the inbound handoff with a local Kafka broker under the same methodology; compare distributions (validates ADR 0002 with data) — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.9 Bare metal vs Docker** — *Conditional — start only after explicit go-ahead.* Three configurations under the same methodology: bare metal; Docker correctly configured (`--network host`, `--ipc host`, `--cpuset-cpus`, no CPU quota); Docker with default settings. Latency distributions compared (tests the premise of ADR 0004).
+- [ ] **5.10 Batch-auction matching mode** — *Conditional — start only after explicit go-ahead.* Configurable "match every N µs" mode alongside continuous matching; compare latency distributions and execution outcomes against continuous matching.
 
 ## Phase 6 — High availability
 
-- [ ] **6.1 Aeron Cluster** — engine as a replicated state machine across 3 nodes (can be processes on separate machines or containers for correctness; latency numbers labelled accordingly).
+- [ ] **6.1 Aeron Cluster** — *Conditional — start only after explicit go-ahead.* Engine as a replicated state machine across 3 nodes (can be processes on separate machines or containers for correctness; latency numbers labelled accordingly).
   - ✅ Leader kill test: no lost or duplicated events; failover time measured.
-- [ ] **6.2 ADR** on the latency cost of consensus vs primary/backup.
+- [ ] **6.2 ADR** on the latency cost of consensus vs primary/backup — *Conditional — start only after explicit go-ahead.*
 
 ## Phase 7 — Maven parity
 
 Rationale: ADR 0003. Start only after v0.1 is tagged and the module layout is stable.
 
-- [ ] **7.1 `pom.xml` (parent + modules)** mirroring every Gradle module, dependency version, compiler flag and test configuration.
-- [ ] **7.2 JMH via Maven** — shaded `benchmarks.jar`.
+- [ ] **7.1 `pom.xml` (parent + modules)** — *Conditional — start only after explicit go-ahead.* Mirrors every Gradle module, dependency version, compiler flag and test configuration.
+- [ ] **7.2 JMH via Maven** — *Conditional — start only after explicit go-ahead.* Shaded `benchmarks.jar`.
   - ✅ Same benchmark list as Gradle's `jmh` task.
-- [ ] **7.3 Parity check script** — compares resolved dependency lists from `mvn dependency:list` and `./gradlew dependencies` (runtime classpath of each module).
+- [ ] **7.3 Parity check script** — *Conditional — start only after explicit go-ahead.* Compares resolved dependency lists from `mvn dependency:list` and `./gradlew dependencies` (runtime classpath of each module).
   - ✅ Script fails on any difference; runs in CI.
-- [ ] **7.4 CI matrix** — both builds compile and run all tests; either failing fails the pipeline.
-- [ ] **7.5 CLAUDE.md updated** — rule: every build change is applied to both builds in the same commit.
+- [ ] **7.4 CI matrix** — *Conditional — start only after explicit go-ahead.* Both builds compile and run all tests; either failing fails the pipeline.
+- [ ] **7.5 CLAUDE.md updated** — *Conditional — start only after explicit go-ahead.* Rule: every build change is applied to both builds in the same commit.
 
 ## Phase 8 — Kernel bypass (design only)
 
-- [ ] **8.1 Design doc** — how the gateway and market data would use kernel bypass (e.g. OpenOnload with Solarflare NICs via LD_PRELOAD, transparent to Java sockets; Aeron's options), expected gains, and why it is not implemented on the current hardware.
+- [ ] **8.1 Design doc** — *Conditional — start only after explicit go-ahead.* How the gateway and market data would use kernel bypass (e.g. OpenOnload with Solarflare NICs via LD_PRELOAD, transparent to Java sockets; Aeron's options), expected gains, and why it is not implemented on the current hardware.
