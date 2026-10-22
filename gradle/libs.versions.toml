@@ -1,0 +1,29 @@
+# The dependency list is deliberately small. Ask before adding anything (CLAUDE.md -> Workflow rules).
+
+[versions]
+java = "25"
+# Aeron 1.53.3 is built against Agrona 2.6.1, SBE 1.41.0 against 2.7.0.
+# Agrona is pinned to the higher of the two so resolution is explicit, not incidental.
+agrona = "2.7.0"
+aeron = "1.53.3"
+sbe = "1.41.0"
+hdrhistogram = "2.2.2"
+jmh = "1.37"
+# JUnit 5.14 matches the JUnit Platform (1.14) that jqwik 1.10 is built against.
+junit = "5.14.4"
+jqwik = "1.10.2"
+jmh-plugin = "0.7.3"
+
+[libraries]
+agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
+aeron-client = { module = "io.aeron:aeron-client", version.ref = "aeron" }
+aeron-driver = { module = "io.aeron:aeron-driver", version.ref = "aeron" }
+sbe-tool = { module = "uk.co.real-logic:sbe-tool", version.ref = "sbe" }
+hdrhistogram = { module = "org.hdrhistogram:HdrHistogram", version.ref = "hdrhistogram" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
+
+# Used by build-logic to apply plugins from convention scripts.
+jmh-gradle-plugin = { module = "me.champeau.jmh:jmh-gradle-plugin", version.ref = "jmh-plugin" }

@@ -29,7 +29,7 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 
 ## Phase 0 — Repository bootstrap
 
-- [ ] **0.1 Gradle multi-module skeleton**
+- [x] **0.1 Gradle multi-module skeleton**
   - Modules per `CLAUDE.md`, Kotlin DSL, version catalog, Java 25 toolchain.
   - ✅ `./gradlew build` passes on a clean checkout.
 - [ ] **0.2 CI**

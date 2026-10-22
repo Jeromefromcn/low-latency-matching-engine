@@ -1,0 +1,13 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+out/
+.vscode/
+
+# jqwik failure database (run-local state)
+.jqwik-database

@@ -116,7 +116,7 @@ docs/          roadmap, methodology, ADRs, runbooks
 
 ## Commands
 
-(Fill in as Phase 0 lands.)
+(`gateway-fix` is added in Phase 4.)
 
 ```
 ./gradlew build                 # compile + unit tests
