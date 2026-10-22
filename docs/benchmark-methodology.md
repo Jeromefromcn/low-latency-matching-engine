@@ -54,14 +54,15 @@ Results from VMs, laptops-in-default-state, cloud hosts or CI runners are labell
 
 ## 7. Result directory layout
 
-```
-bench/<area>/<label>-<YYYYmmdd-HHMMSS>/
-├── command.txt          exact command line(s) and git commit hash
-├── env/                 output of collect-env.sh
-├── gc.log               JVM unified GC log (-Xlog:gc*)
-├── *.hlog               HdrHistogram interval logs
-├── *.hgrm               percentile distribution(s)
-└── notes.md             what was varied, observations
+```mermaid
+flowchart LR
+    root["bench/&lt;area&gt;/&lt;label&gt;-&lt;YYYYmmdd-HHMMSS&gt;/"]
+    root --> cmd["command.txt<br/>exact command line(s) and git commit hash"]
+    root --> env["env/<br/>output of collect-env.sh"]
+    root --> gc["gc.log<br/>JVM unified GC log (-Xlog:gc*)"]
+    root --> hlog["*.hlog<br/>HdrHistogram interval logs"]
+    root --> hgrm["*.hgrm<br/>percentile distribution(s)"]
+    root --> notes["notes.md<br/>what was varied, observations"]
 ```
 
 Raw files are committed. Never edit them; re-run instead.

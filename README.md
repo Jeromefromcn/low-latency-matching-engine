@@ -13,12 +13,15 @@ A limit-order-book matching engine that explores how far tail latency can be pus
 
 ## Design at a glance
 
-```
-loadgen (CPU 1) ──► inbound ring buffer ──► matching engine (CPU 2) ──► outbound ring buffer
-                                                   │
-                                     journal + Aeron driver (CPU 3)
-housekeeping (CPU 0): histogram snapshots → .hlog files (evidence)
-                                          → Prometheus summaries (monitoring only)
+```mermaid
+flowchart LR
+    loadgen["loadgen (CPU 1)"] --> inbound[inbound ring buffer]
+    inbound --> engine["matching engine (CPU 2)"]
+    engine --> outbound[outbound ring buffer]
+    engine --- journal["journal + Aeron driver (CPU 3)"]
+
+    housekeeping["housekeeping (CPU 0):<br/>histogram snapshots"] --> hlog[".hlog files (evidence)"]
+    housekeeping --> prom["Prometheus summaries (monitoring only)"]
 ```
 
 Key decisions are recorded as ADRs:
