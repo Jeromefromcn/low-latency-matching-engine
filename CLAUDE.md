@@ -47,6 +47,7 @@ On the hot path:
 - **No metrics libraries.** No Prometheus/Micrometer calls on the hot path. Latency is recorded with `System.nanoTime()` into per-thread HdrHistogram instances only (see ADR 0001).
 - **Primitive collections only** (Agrona collections), pre-sized at startup. No `HashMap<Long, ...>`, no `TreeMap`.
 - **No `java.time`, no `System.currentTimeMillis()`** in matching logic. Time is an input carried on the message, so replay is deterministic.
+- **Determinism.** Engine logic must not read wall-clock time, use randomness, or depend on hash-map iteration order (Agrona maps included). All timestamps come from input events.
 - Prefer flat, cache-friendly data layouts (arrays / off-heap buffers indexed by int) over object graphs.
 
 If a change on the hot path cannot satisfy these rules, stop and explain why before proceeding.
@@ -57,6 +58,8 @@ Claims of "zero allocation" must be backed by at least one of:
 
 - a JMH benchmark run with `-prof gc` showing `gc.alloc.rate.norm ≈ 0 B/op`, and/or
 - a steady-state run whose GC log shows **zero GC events** after warm-up for the full measurement window.
+
+Hidden allocations to look for, and the approved alternatives: `docs/zero-allocation.md`.
 
 ## Measurement rules (summary — full rules in `docs/benchmark-methodology.md`)
 

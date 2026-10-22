@@ -5,7 +5,7 @@ Each task has an ID, a deliverable and **acceptance criteria that must be demons
 The roadmap has two tracks:
 
 - **Track A — Committed (weeks 1–4):** Phases 0–3, ending with the `v0.1` tag.
-- **Track B — Conditional:** Phases 4–8. Nothing in Track B starts without an explicit go-ahead (see [Decision point after v0.1](#decision-point-after-v01)).
+- **Track B — Conditional:** Phases 4–9. Nothing in Track B starts without an explicit go-ahead (see [Decision point after v0.1](#decision-point-after-v01)).
 
 Task IDs are stable. Sections appear in **execution order**, not numeric order.
 
@@ -65,12 +65,14 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 - [ ] **2.6 Deterministic replay**
   - ✅ Replaying the same inbound journal twice yields byte-identical outbound event streams (hash compared in test).
 - [ ] **2.7 Zero-allocation proof for engine-core**
-  - ✅ JMH `-prof gc` shows ~0 B/op for add/cancel/match paths; result committed under `bench/jmh/`.
+  - Code reviewed against the hidden-allocation checklist in `docs/zero-allocation.md`.
+  - ✅ JMH `-prof gc` shows `gc.alloc.rate.norm` = 0 B/op for add/cancel/match paths (any sub-byte residue must be shown to come from JMH infrastructure, not the benchmarked code); result committed under `bench/jmh/`.
 
 ## Phase 3 — Pipeline and measurement (3.1–3.7 on any machine)
 
 - [ ] **3.1 Threaded pipeline** — inbound ring buffer → engine thread → outbound ring buffer (Agrona `OneToOneRingBuffer` or Aeron IPC; decision in ADR). Replaces the 0.4 stub engine with the Phase 2 engine.
   - ✅ Engine thread pinned to CPU 2 in the benchmark profile; busy-spin idle strategy configurable.
+  - ✅ JMH `-prof gc` on the decode → match → encode path shows `gc.alloc.rate.norm` = 0 B/op; result committed under `bench/jmh/`.
 - [ ] **3.2 Journal** — inbound messages persisted in sequence before/alongside processing (Aeron Archive or Chronicle Queue — decide via ADR).
   - ✅ Replay from journal reproduces state (re-uses 2.6 test).
 - [ ] **3.3 Stage timestamps + HdrHistogram** — per-stage `nanoTime` stamps (ingress, post-decode, post-match, egress) recorded into per-thread histograms; interval logs written by the housekeeping thread.
@@ -80,7 +82,8 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 - [ ] **3.5 Monitoring bridge** — housekeeping thread exports summarised percentiles, throughput and GC counts to Prometheus; Grafana dashboard JSON committed.
   - ✅ Dashboard screenshot in docs; zero Prometheus calls reachable from the hot path (verified by a dependency/ArchUnit test).
 - [ ] **3.6 GC-free steady state**
-  - ✅ 10-minute run at target rate: GC log shows 0 collections after warm-up. (GC count is hardware-independent; a development-machine run is acceptable, labelled `exploratory`.)
+  - ✅ 10-minute run at target rate: GC log shows 0 collections during the measured window (after warm-up). (GC count is hardware-independent; a development-machine run is acceptable, labelled `exploratory`.)
+  - ✅ Epsilon run: full load test with `-XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC` and a small heap processes several hundred million messages without `OutOfMemoryError`. Heap size and message count are recorded in the result directory. Off-hot-path allocation in the same JVM (housekeeping thread: `.hlog` writer, Prometheus export) is either disabled for this run or its budget is measured and stated.
 - [ ] **3.7 Profiling evidence** — JFR recording and async-profiler flame graph of a steady-state run.
   - ✅ Committed under the run's `bench/` directory with a short analysis.
 
@@ -132,32 +135,71 @@ The decision is recorded here (date and one-line reason) before any Track B task
 
 ## Phase 4 — Gateway, risk and market data
 
+- [ ] **4.0 Thin FIX ingress (QuickFIX/J)** — *Conditional — start only after explicit go-ahead.* First Track B task, before the Artio gateway. Goal: a working FIX front door quickly; latency is not a goal.
+  - Minimal message set: Logon, Heartbeat, NewOrderSingle (35=D), OrderCancelRequest (35=F) in; ExecutionReport (35=8) out. Translates to and from the internal SBE messages (2.1).
+  - Runs as its own process in its own module (not `gateway-fix`, which `CLAUDE.md` treats as a hot-path process). QuickFIX/J is a new dependency and needs approval first (`CLAUDE.md` → Workflow rules). Any latency measured through it is labelled `exploratory`.
+  - The low-latency Artio gateway (4.1) remains the planned replacement.
+  - ✅ Verified by: integration test with a FIX initiator covering logon, heartbeat, new order → ExecutionReport (new / fill), cancel → ExecutionReport (cancelled).
 - [ ] **4.1 FIX gateway (Artio)** — *Conditional — start only after explicit go-ahead.* NewOrderSingle (35=D), OrderCancelRequest (35=F) in; ExecutionReport (35=8) out.
   - ✅ Integration test with a FIX initiator; latency stage added to histograms.
 - [ ] **4.2 Pre-trade risk checks** — *Conditional — start only after explicit go-ahead.* Max order qty, max notional, price band, per-account position limit; allocation-free.
   - ✅ Unit + property tests; JMH shows cost per check.
 - [ ] **4.3 Market data publisher** — *Conditional — start only after explicit go-ahead.* Incremental book updates + trades over Aeron UDP (multicast or unicast).
   - ✅ Subscriber rebuilds an identical book from the feed (differential test).
+- [ ] **4.4 Multi-gateway ingress and sequencing** — *Conditional — start only after explicit go-ahead.* Goal: several gateway threads feed one engine through a single, explicit sequencing point.
+  - Gateway threads publish into the engine via an Aeron IPC concurrent publication; the engine reads through a single subscription. The publication position is the sequencing point, and the journal (3.2) records that order.
+  - Backpressure: per-session rate limit at the gateway; when ingress is full (`offer` reports back-pressure) the order is rejected to the client, never queued unboundedly.
+  - Design note `docs/design/sequencing.md`: the parallel → sequence → parallel pipeline; why only the matching logic must be a single writer; Disruptor cursor vs Aeron tail counter vs single-threaded sequencer.
+  - New ADR (next free number) required: a multi-producer ingress departs from the SPSC handoff rule in `CLAUDE.md` and ADR 0002. The ADR states the scope of the exception and both are updated to match — not overridden silently.
+  - ✅ Verified by: integration test with ≥ 2 gateways under load produces one total order in the journal that replays byte-identically (2.6); a test saturating ingress shows rejects with bounded memory and no queue growth; design note and ADR committed.
+
+## Phase 9 — Partitioning (after Phase 4)
+
+Numbered 9 because task IDs are stable; it executes after Phase 4.
+
+- [ ] **9.1 ADR: partition rules** — *Conditional — start only after explicit go-ahead.* Goal: record how instruments are assigned to partitions.
+  - Correlated instruments (spreads/combos, shared underlying) must share a partition; load-based bin packing second; hot instruments isolated.
+  - ✅ Verified by: ADR committed (next free number); a config validator rejects any configuration that splits a correlated group across partitions.
+- [ ] **9.2 Static instrument → partition routing** — *Conditional — start only after explicit go-ahead.* Goal: scale beyond one engine thread by sharding instruments, with no intraday movement.
+  - Routing table loaded from a static config file at start-up; no intraday rebalancing. Each partition is an independent engine (own book, sequencing point and journal).
+  - Core budget: the benchmark machine has one engine core (CPU 2). More than one partition there is a functional test only, labelled `exploratory`, unless hardware is added.
+  - ✅ Verified by: routing tests (every configured instrument maps to exactly one partition; unknown instruments are rejected); a multi-partition run in which each partition's journal replays byte-identically (2.6).
 
 ## Phase 5 — Platform tuning experiments
 
 Each experiment = one controlled variable, before/after results committed, conclusion in `bench/experiments/README.md`.
+
+- [ ] **5.0 JIT warm-up harness** — *Conditional — start only after explicit go-ahead.* Infrastructure, not an experiment; prerequisite for 5.6. Goal: reach steady-state compiled code before the measured window without touching real state.
+  - Warm-up driver exercises every order path: limit, market, cancel, amend, reject, partial fill, full fill — with buy/sell mix and price/size distributions close to the load generator's (3.4).
+  - Isolation: a dedicated warm-up instrument, or a full state reset after warm-up. Warm-up traffic is kept out of the journal (or explicitly marked) so replay (2.6, 3.2) stays deterministic.
+  - JVM config: larger `-XX:ReservedCodeCacheSize`; JIT compiler and GC threads stay on non-isolated cores (CPU 0) — only the named hot-path threads are pinned to CPUs 1–3.
+  - This changes the warm-up procedure in `docs/benchmark-methodology.md` §3: version the procedure and record which version each result used.
+  - ✅ Verified by: JFR recording of a steady-state run shows zero `jdk.Compilation` and zero `jdk.Deoptimization` events during the measured window.
 
 - [ ] **5.1 Busy-spin vs yielding vs parking idle strategies** — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.2 Thread affinity on vs off** — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.3 isolcpus/nohz_full on vs off** (reuses Phase 1 kernels) — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.4 Huge pages on vs off** for the journal/buffers — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.5 GC choice** — ZGC vs G1 vs Epsilon (with allocation-free code) — *Conditional — start only after explicit go-ahead.*
-- [ ] **5.6 JIT warm-up** — latency over time from cold start; effect of warm-up strategy — *Conditional — start only after explicit go-ahead.*
+- [ ] **5.6 JIT warm-up** — latency over time from cold start; effect of warm-up strategy — *Conditional — start only after explicit go-ahead.* Requires 5.0.
+  - First-N-orders latency under three regimes: no warm-up; partial-branch warm-up (a subset of the 5.0 order paths); full warm-up (5.0).
+  - Optional: tiered compilation on vs `-XX:-TieredCompilation`.
+  - ✅ Verified by: raw per-order latency of the first N orders for each regime committed, plus the percentile set required by the methodology; conclusion in `bench/experiments/README.md`.
 - [ ] **5.7 Power-loss recovery** — pull the plug mid-run; journal recovers to a consistent state — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.8 Kafka on the path** — replace the inbound handoff with a local Kafka broker under the same methodology; compare distributions (validates ADR 0002 with data) — *Conditional — start only after explicit go-ahead.*
 - [ ] **5.9 Bare metal vs Docker** — *Conditional — start only after explicit go-ahead.* Three configurations under the same methodology: bare metal; Docker correctly configured (`--network host`, `--ipc host`, `--cpuset-cpus`, no CPU quota); Docker with default settings. Latency distributions compared (tests the premise of ADR 0004).
 - [ ] **5.10 Batch-auction matching mode** — *Conditional — start only after explicit go-ahead.* Configurable "match every N µs" mode alongside continuous matching; compare latency distributions and execution outcomes against continuous matching.
+- [ ] **5.11 Single Writer: shared publication vs per-gateway SPSC** — *Conditional — start only after explicit go-ahead.* Requires 4.4. Goal: measure what multi-producer contention at the ingress costs.
+  - Configuration A: shared Aeron concurrent publication (multi-producer). Configuration B: one SPSC channel per gateway, merged by a single sequencer thread. Each with 1 / 2 / 4 producers.
+  - The benchmark machine cannot give 4 producers plus a sequencer their own isolated cores; the core placement of every thread is stated with each result.
+  - ✅ Verified by: P99 / P99.9 (with the full percentile set per the methodology) for all six configurations committed under `bench/experiments/`; conclusion in `bench/experiments/README.md`.
 
 ## Phase 6 — High availability
 
 - [ ] **6.1 Aeron Cluster** — *Conditional — start only after explicit go-ahead.* Engine as a replicated state machine across 3 nodes (can be processes on separate machines or containers for correctness; latency numbers labelled accordingly).
-  - ✅ Leader kill test: no lost or duplicated events; failover time measured.
+  - Failover protocol: clients resend unacknowledged orders after failover; the engine de-duplicates by ClOrdID (scoped per session), so resends are idempotent. The de-dup table is part of the replicated state: pre-sized, allocation-free, no `String` keys, with a stated retention window.
+  - Demo: kill the leader under load.
+  - ✅ Verified by: failover time measured; zero lost and zero duplicate executions; state of all nodes identical after replay (hash compared, as in 2.6).
 - [ ] **6.2 ADR** on the latency cost of consensus vs primary/backup — *Conditional — start only after explicit go-ahead.*
 
 ## Phase 7 — Maven parity
