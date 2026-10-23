@@ -1,5 +1,7 @@
 # Low-Latency Matching Engine (Java)
 
+[![build](https://github.com/Jeromefromcn/low-latency-matching-engine/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Jeromefromcn/low-latency-matching-engine/actions/workflows/build.yml)
+
 A limit-order-book matching engine that explores how far tail latency can be pushed on the JVM — with every number backed by raw, reproducible measurement data.
 
 > **Status:** Phase 0 — bootstrapping. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
@@ -49,4 +51,4 @@ Consumer hardware is a deliberate constraint: the point is the method and the re
 ./gradlew build
 ```
 
-(Available from Phase 0.)
+Requires a JDK 25 for the Gradle toolchain; the wrapper downloads Gradle itself.
