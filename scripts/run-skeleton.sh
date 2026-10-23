@@ -16,6 +16,10 @@ if [[ " $* " != *" profile=bench "* && "$LABEL" != *exploratory* ]]; then
   exit 1
 fi
 
+# Recorded before the result directory exists, so the run's own output is not reported as a change.
+GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+GIT_STATUS="$(git -C "$REPO_ROOT" status --porcelain)"
+
 OUT="$REPO_ROOT/bench/skeleton/${LABEL}-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT"
 
@@ -28,9 +32,9 @@ export JAVA_OPTS="-Xlog:gc*:file=$OUT/gc.log $JVM_OPTS_EXTRA"
 ARGS=("outputDir=$OUT" "$@")
 {
   echo "# git commit"
-  git -C "$REPO_ROOT" rev-parse HEAD
+  echo "$GIT_COMMIT"
   echo "# uncommitted changes (empty = clean tree)"
-  git -C "$REPO_ROOT" status --porcelain
+  echo "$GIT_STATUS"
   echo "# command"
   echo "JAVA_OPTS=\"$JAVA_OPTS\" $BIN ${ARGS[*]}"
 } > "$OUT/command.txt"
