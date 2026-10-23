@@ -32,7 +32,7 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 - [x] **0.1 Gradle multi-module skeleton**
   - Modules per `CLAUDE.md`, Kotlin DSL, version catalog, Java 25 toolchain.
   - ✅ `./gradlew build` passes on a clean checkout.
-- [ ] **0.2 CI**
+- [x] **0.2 CI**
   - GitHub Actions: build + unit tests on every push.
   - ✅ Green badge in README.
 - [ ] **0.3 Code style**
