@@ -1,2 +1,0 @@
-$ cat /proc/cmdline
-BOOT_IMAGE=/vmlinuz-7.0.0-1013-oracle root=UUID=4cc72601-38a8-488a-ac0c-f94b9e06e1bf ro console=tty1 console=ttyAMA0 nvme.shutdown_timeout=10 libiscsi.debug_libiscsi_eh=1 crash_kexec_post_notifiers iscsi_auto_skip_initramfs_networking

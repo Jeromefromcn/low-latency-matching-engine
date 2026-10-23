@@ -1,4 +1,0 @@
-collected_at=2026-10-23T11:04:53+08:00
-hostname=<redacted-host>
-git_commit=c41b081e0c771450d5a9922978a002c6a31129e9
-git_dirty=0

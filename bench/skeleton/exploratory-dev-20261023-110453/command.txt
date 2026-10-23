@@ -1,6 +1,0 @@
-# git commit
-c41b081e0c771450d5a9922978a002c6a31129e9
-# uncommitted changes (empty = clean tree)
-
-# command
-JAVA_OPTS="-Xlog:gc*:file=/home/ubuntu/jerome/low-latency-matching-engine/bench/skeleton/exploratory-dev-20261023-110453/gc.log -Xms1g -Xmx1g -XX:+AlwaysPreTouch" /home/ubuntu/jerome/low-latency-matching-engine/engine-app/build/install/engine-app/bin/engine-app outputDir=/home/ubuntu/jerome/low-latency-matching-engine/bench/skeleton/exploratory-dev-20261023-110453 profile=dev

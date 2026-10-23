@@ -2,7 +2,7 @@
 
 Every latency number published from this repository follows these rules. If a run does not follow them, its results may be kept for exploration but must not be quoted.
 
-Methodology version: **1** (bump and log changes at the bottom when any rule changes).
+Methodology version: **2** (bump and log changes at the bottom when any rule changes).
 
 ## 1. What is measured
 
@@ -54,6 +54,14 @@ Results from VMs, laptops-in-default-state, cloud hosts or CI runners are labell
 
 ## 7. Result directory layout
 
+There are two kinds of run:
+
+- **Day-to-day runs** (development, debugging, smoke checks) write to `build/runs/<area>/`, which is git-ignored and replaced by the next run. They carry no environment snapshot and are never cited.
+- **Evidence runs** are generated deliberately, once, when a result is going to be published or compared (platform baselines, headline numbers, experiment before/after). Only evidence runs go under `bench/`, and each gets its own directory with the layout below. They require a clean working tree, so the recorded commit is exactly the code that ran.
+
+`bench/` therefore grows only by deliberate decision, not with every run.
+
+
 ```mermaid
 flowchart LR
     root["bench/&lt;area&gt;/&lt;label&gt;-&lt;YYYYmmdd-HHMMSS&gt;/"]
@@ -76,3 +84,4 @@ A before/after comparison changes **one variable** only, uses identical rate/dur
 | Version | Date | Change |
 |---|---|---|
 | 1 | 2026-10-22 | Initial methodology |
+| 2 | 2026-10-23 | §7: day-to-day runs go to git-ignored `build/runs/`; only deliberately generated evidence runs go under `bench/` |

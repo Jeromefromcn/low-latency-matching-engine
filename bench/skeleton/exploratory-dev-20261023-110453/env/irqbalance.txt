@@ -1,3 +1,0 @@
-$ systemctl is-active irqbalance
-inactive
-(command failed or unavailable: exit 4)

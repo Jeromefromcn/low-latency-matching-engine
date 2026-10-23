@@ -1,7 +1,0 @@
-$ cpupower idle-info
-CPUidle driver: none
-CPUidle governor: menu
-analyzing CPU 1:
-
-CPU 1: No idle states
-

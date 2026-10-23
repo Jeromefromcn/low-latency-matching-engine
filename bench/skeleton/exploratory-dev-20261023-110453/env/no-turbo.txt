@@ -1,3 +1,0 @@
-$ cat /sys/devices/system/cpu/intel_pstate/no_turbo
-cat: /sys/devices/system/cpu/intel_pstate/no_turbo: No such file or directory
-(command failed or unavailable: exit 1)
