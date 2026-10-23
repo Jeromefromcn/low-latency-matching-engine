@@ -1,0 +1,5 @@
+$ bash -c for f in /sys/class/power_supply/*/online /sys/class/power_supply/*/status; do echo "$f: $(cat "$f")"; done
+cat: '/sys/class/power_supply/*/online': No such file or directory
+/sys/class/power_supply/*/online: 
+cat: '/sys/class/power_supply/*/status': No such file or directory
+/sys/class/power_supply/*/status: 

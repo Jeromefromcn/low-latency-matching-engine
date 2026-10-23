@@ -1,0 +1,31 @@
+[0.038s][info][gc,init] CardTable entry size: 512
+[0.038s][info][gc     ] Using G1
+[0.708s][info][gc,init] Version: 25.0.2+10-69 (release)
+[0.709s][info][gc,init] CPUs: 4 total, 4 available
+[0.709s][info][gc,init] Memory: 23972M
+[0.709s][info][gc,init] Large Page Support: Disabled
+[0.709s][info][gc,init] NUMA Support: Disabled
+[0.709s][info][gc,init] Compressed Oops: Enabled (32-bit)
+[0.709s][info][gc,init] Heap Region Size: 1M
+[0.709s][info][gc,init] Heap Min Capacity: 1G
+[0.709s][info][gc,init] Heap Initial Capacity: 1G
+[0.709s][info][gc,init] Heap Max Capacity: 1G
+[0.709s][info][gc,init] Pre-touch: Enabled
+[0.709s][info][gc,init] Parallel Workers: 4
+[0.709s][info][gc,init] Concurrent Workers: 1
+[0.709s][info][gc,init] Concurrent Refinement Workers: 4
+[0.709s][info][gc,init] Periodic GC: Disabled
+[0.735s][info][gc,metaspace] CDS archive(s) mapped at: [0x00000ff800000000-0x00000ff800db0000-0x00000ff800db0000), size 14352384, SharedBaseAddress: 0x00000ff800000000, ArchiveRelocationMode: 1.
+[0.735s][info][gc,metaspace] Compressed class space mapped at: 0x00000ff801000000-0x00000ff841000000, reserved size: 1073741824
+[0.735s][info][gc,metaspace] UseCompressedClassPointers 1, UseCompactObjectHeaders 0
+[0.735s][info][gc,metaspace] Narrow klass pointer bits 32, Max shift 3
+[0.735s][info][gc,metaspace] Narrow klass base: 0x00000ff800000000, Narrow klass shift: 0
+[0.735s][info][gc,metaspace] Encoding Range: [0x00000ff800000000 - 0x00000ff900000000), (4294967296 bytes)
+[0.735s][info][gc,metaspace] Klass Range:    [0x00000ff800010000 - 0x00000ff841000000), (1090453504 bytes)
+[0.735s][info][gc,metaspace] Klass ID Range:  [65536 - 1090519033) (1090453497)
+[0.735s][info][gc,metaspace] Protection zone: [0x00000ff800000000 - 0x00000ff800010000), (65536 bytes)
+[70.946s][info][gc,exit     ] Heap
+[70.946s][info][gc,exit     ]  garbage-first heap   total reserved 1048576K, committed 1048576K, used 10884K [0x00000000c0000000, 0x0000000100000000)
+[70.946s][info][gc,exit     ]   region size 1024K, 10 young (10240K), 0 survivors (0K)
+[70.946s][info][gc,exit     ]  Metaspace       used 1942K, committed 2176K, reserved 1114112K
+[70.946s][info][gc,exit     ]   class space    used 132K, committed 256K, reserved 1048576K

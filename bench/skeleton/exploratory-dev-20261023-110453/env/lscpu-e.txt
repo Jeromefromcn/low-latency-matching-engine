@@ -1,0 +1,6 @@
+$ lscpu -e
+CPU NODE SOCKET CORE L1d:L1i:L2 ONLINE
+  0    0      0    0 0:0:0         yes
+  1    0      0    1 0:0:0         yes
+  2    0      0    2 0:0:0         yes
+  3    0      0    3 0:0:0         yes

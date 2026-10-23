@@ -1,0 +1,4 @@
+$ bash -c for z in /sys/class/thermal/thermal_zone*; do echo "$(cat "$z/type"): $(cat "$z/temp")"; done
+cat: '/sys/class/thermal/thermal_zone*/type': No such file or directory
+cat: '/sys/class/thermal/thermal_zone*/temp': No such file or directory
+: 

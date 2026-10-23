@@ -38,7 +38,7 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 - [x] **0.3 Code style**
   - Formatter (e.g. Spotless) wired into the build.
   - ✅ `./gradlew spotlessCheck` runs in CI.
-- [ ] **0.4 Walking skeleton (end-to-end, no matching logic)**
+- [x] **0.4 Walking skeleton (end-to-end, no matching logic)**
   - Constant-rate loadgen → inbound ring buffer → stub engine (acknowledges every message, no book) → outbound ring buffer; `nanoTime` stamps recorded into per-thread HdrHistograms; housekeeping thread writes `.hlog`.
   - Idle strategy and CPU affinity are configurable from the start: the development profile uses a non-spinning idle strategy and no pinning; the benchmark profile uses busy-spin and the core allocation in `CLAUDE.md`. Thread pinning itself is implemented in 3.1 (no affinity library is added before then); until then a profile that requests pinning fails fast at start-up instead of running unpinned.
   - `.hlog` size is bounded: one file per run, fixed run duration, configurable log interval (default 1 s), and hard caps: run duration is validated against a maximum at start-up; bytes are checked after every interval, and exceeding the cap stops recording, writes a truncation marker and fails the run (non-zero exit) — no rotation, no silent truncation.

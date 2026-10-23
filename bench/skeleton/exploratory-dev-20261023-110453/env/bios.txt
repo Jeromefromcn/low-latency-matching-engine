@@ -1,0 +1,5 @@
+$ bash -c cat /sys/class/dmi/id/bios_vendor /sys/class/dmi/id/bios_version /sys/class/dmi/id/bios_date /sys/class/dmi/id/product_name 2>/dev/null
+EFI Development Kit II / OVMF
+1.6.6
+08/22/2023
+KVM Virtual Machine
