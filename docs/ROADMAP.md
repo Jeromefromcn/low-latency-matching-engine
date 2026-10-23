@@ -39,11 +39,12 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
   - Formatter (e.g. Spotless) wired into the build.
   - ✅ `./gradlew spotlessCheck` runs in CI.
 - [ ] **0.4 Walking skeleton (end-to-end, no matching logic)**
-  - Constant-rate loadgen → inbound ring buffer → stub engine (acknowledges every message, no book) → outbound ring buffer; `nanoTime` stamps recorded into per-thread HdrHistograms; housekeeping thread writes `.hlog` and exports summaries to Prometheus; one Grafana panel.
+  - Constant-rate loadgen → inbound ring buffer → stub engine (acknowledges every message, no book) → outbound ring buffer; `nanoTime` stamps recorded into per-thread HdrHistograms; housekeeping thread writes `.hlog`.
   - Idle strategy and CPU affinity are configurable from the start: the development profile uses a non-spinning idle strategy and no pinning; the benchmark profile uses busy-spin and the core allocation in `CLAUDE.md`.
-  - Purpose: prove the wiring and the measurement/monitoring chain before any engine logic exists. Tasks 3.1, 3.3, 3.4 and 3.5 later harden each piece to its own acceptance criteria.
-  - Any new dependency (e.g. a Prometheus client) needs approval first (`CLAUDE.md` → Workflow rules).
-  - ✅ A run on a development machine produces a `.hlog` under `bench/` (labelled `exploratory`) and the Grafana panel shows summaries from the same run.
+  - `.hlog` size is bounded: one file per run, fixed run duration, configurable log interval (default 1 s), and a hard cap on duration and bytes. Exceeding the cap stops recording, writes a truncation marker and fails the run (non-zero exit) — no rotation, no silent truncation.
+  - Purpose: prove the wiring and the measurement chain before any engine logic exists. Tasks 3.1, 3.3 and 3.4 later harden each piece to its own acceptance criteria. Prometheus export and the first Grafana panel are deferred to 3.5 (monitoring plane, ADR 0001; off the hot path, so deferring it does not affect engine design).
+  - ✅ A run on a development machine produces a `.hlog` under `bench/` (labelled `exploratory`) that `HistogramLogReader` reads back with a non-zero sample count, and the file size matches the configured interval × duration.
+  - ✅ A test shows a run exceeding the cap fails with the truncation marker written.
 
 ## Phase 2 — Core matching engine (correctness first)
 
@@ -79,7 +80,7 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
   - ✅ `.hlog` produced per run; recording itself verified allocation-free.
 - [ ] **3.4 Constant-rate load generator** — open model, configurable rate, intended-send-time based latency (corrects coordinated omission); pinned to CPU 1 in the benchmark profile.
   - ✅ Test showing latency is measured from *intended* send time.
-- [ ] **3.5 Monitoring bridge** — housekeeping thread exports summarised percentiles, throughput and GC counts to Prometheus; Grafana dashboard JSON committed.
+- [ ] **3.5 Monitoring bridge** — housekeeping thread exports summarised percentiles, throughput and GC counts to Prometheus (`prometheus-metrics-core` + `prometheus-metrics-exporter-httpserver`, approved 2026-10-23); Grafana dashboard JSON committed. Includes the Prometheus/Grafana part originally scoped in 0.4.
   - ✅ Dashboard screenshot in docs; zero Prometheus calls reachable from the hot path (verified by a dependency/ArchUnit test).
 - [ ] **3.6 GC-free steady state**
   - ✅ 10-minute run at target rate: GC log shows 0 collections during the measured window (after warm-up). (GC count is hardware-independent; a development-machine run is acceptable, labelled `exploratory`.)
