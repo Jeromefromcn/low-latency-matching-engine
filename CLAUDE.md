@@ -119,7 +119,8 @@ docs/          roadmap, methodology, ADRs, runbooks
 (`gateway-fix` is added in Phase 4.)
 
 ```
-./gradlew build                 # compile + unit tests
+./gradlew build                 # compile + unit tests + spotlessCheck
+./gradlew spotlessApply         # format Java sources (palantir-java-format)
 ./gradlew :engine-core:test     # core tests incl. property-based tests
 ./gradlew :bench-jmh:jmh        # JMH benchmarks
 ```

@@ -4,4 +4,5 @@ plugins {
 
 dependencies {
     implementation(libs.jmh.gradle.plugin)
+    implementation(libs.spotless.gradle.plugin)
 }

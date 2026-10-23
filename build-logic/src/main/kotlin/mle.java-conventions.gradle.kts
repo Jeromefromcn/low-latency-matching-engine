@@ -1,7 +1,9 @@
-// Shared Java settings for every module: Java 25 toolchain, strict compilation, JUnit Platform tests.
+// Shared Java settings for every module: Java 25 toolchain, strict compilation, JUnit Platform tests,
+// palantir-java-format via Spotless (spotlessCheck is part of `check`, so `build` fails on unformatted code).
 
 plugins {
     `java-library`
+    id("com.diffplug.spotless")
 }
 
 val libs = the<VersionCatalogsExtension>().named("libs")
@@ -11,6 +13,14 @@ group = "io.github.jeromefromcn.matching"
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(libs.findVersion("java").get().requiredVersion)
+    }
+}
+
+spotless {
+    java {
+        palantirJavaFormat(libs.findVersion("palantir-java-format").get().requiredVersion)
+        trimTrailingWhitespace()
+        endWithNewline()
     }
 }
 

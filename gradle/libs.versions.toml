@@ -13,6 +13,8 @@ jmh = "1.37"
 junit = "5.14.4"
 jqwik = "1.10.2"
 jmh-plugin = "0.7.3"
+spotless-plugin = "8.10.4"
+palantir-java-format = "2.102.0"
 
 [libraries]
 agrona = { module = "org.agrona:agrona", version.ref = "agrona" }
@@ -27,3 +29,4 @@ jqwik = { module = "net.jqwik:jqwik", version.ref = "jqwik" }
 
 # Used by build-logic to apply plugins from convention scripts.
 jmh-gradle-plugin = { module = "me.champeau.jmh:jmh-gradle-plugin", version.ref = "jmh-plugin" }
+spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless-plugin" }
