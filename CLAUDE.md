@@ -123,4 +123,5 @@ docs/          roadmap, methodology, ADRs, runbooks
 ./gradlew spotlessApply         # format Java sources (palantir-java-format)
 ./gradlew :engine-core:test     # core tests incl. property-based tests
 ./gradlew :bench-jmh:jmh        # JMH benchmarks
+scripts/run-skeleton.sh         # walking-skeleton run -> bench/skeleton/ (default: profile=dev, labelled exploratory)
 ```
