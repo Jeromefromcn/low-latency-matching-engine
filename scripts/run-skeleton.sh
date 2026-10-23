@@ -22,7 +22,7 @@ mkdir -p "$OUT"
 "$REPO_ROOT/gradlew" -q -p "$REPO_ROOT" :engine-app:installDist
 BIN="$REPO_ROOT/engine-app/build/install/engine-app/bin/engine-app"
 
-"$REPO_ROOT/scripts/platform/collect-env.sh" "$OUT/env" >/dev/null
+bash "$REPO_ROOT/scripts/platform/collect-env.sh" "$OUT/env" >/dev/null
 
 export JAVA_OPTS="-Xlog:gc*:file=$OUT/gc.log $JVM_OPTS_EXTRA"
 ARGS=("outputDir=$OUT" "$@")
