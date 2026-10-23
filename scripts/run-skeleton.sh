@@ -5,11 +5,15 @@
 # Usage: [LABEL=exploratory-dev] scripts/run-skeleton.sh [key=value ...]
 #   key=value arguments go to SkeletonMain (e.g. profile=dev rate=20000 durationSeconds=60).
 #   Without profile=bench the label must contain "exploratory" (methodology §6).
+#   REDACT_ENV=1 (default for exploratory labels) drops env files that describe other workloads and
+#   infrastructure on a shared development host, and masks its hostname; the change is listed in notes.md.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${LABEL:-exploratory-dev}"
 JVM_OPTS_EXTRA="${JVM_OPTS_EXTRA:--Xms1g -Xmx1g -XX:+AlwaysPreTouch}"
+if [[ "$LABEL" == *exploratory* ]]; then REDACT_ENV="${REDACT_ENV:-1}"; else REDACT_ENV="${REDACT_ENV:-0}"; fi
+REDACTED_FILES=(services.txt top.txt sysctl.txt interrupts.txt)
 
 if [[ " $* " != *" profile=bench "* && "$LABEL" != *exploratory* ]]; then
   echo "label '$LABEL' must contain 'exploratory' unless profile=bench" >&2
@@ -20,13 +24,24 @@ fi
 GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 GIT_STATUS="$(git -C "$REPO_ROOT" status --porcelain)"
 
-OUT="$REPO_ROOT/bench/skeleton/${LABEL}-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$OUT"
-
 "$REPO_ROOT/gradlew" -q -p "$REPO_ROOT" :engine-app:installDist
 BIN="$REPO_ROOT/engine-app/build/install/engine-app/bin/engine-app"
 
-bash "$REPO_ROOT/scripts/platform/collect-env.sh" "$OUT/env" >/dev/null
+# Collected outside the repository for the same reason: collect-env.sh records whether the tree is dirty.
+ENV_TMP="$(mktemp -d)"
+bash "$REPO_ROOT/scripts/platform/collect-env.sh" "$ENV_TMP/env" >/dev/null
+
+OUT="$REPO_ROOT/bench/skeleton/${LABEL}-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$OUT"
+mv "$ENV_TMP/env" "$OUT/env" && rmdir "$ENV_TMP"
+
+REDACTION_NOTE="none"
+if [[ "$REDACT_ENV" == 1 ]]; then
+  for f in "${REDACTED_FILES[@]}"; do rm -f "$OUT/env/$f"; done
+  HOST="$(hostname)"
+  grep -rlF -- "$HOST" "$OUT/env" | xargs -r sed -i "s/$HOST/<redacted-host>/g"
+  REDACTION_NOTE="env/ ${REDACTED_FILES[*]} removed and hostname masked (REDACT_ENV=1, shared development host)"
+fi
 
 export JAVA_OPTS="-Xlog:gc*:file=$OUT/gc.log $JVM_OPTS_EXTRA"
 ARGS=("outputDir=$OUT" "$@")
@@ -54,6 +69,7 @@ cat > "$OUT/notes.md" <<NOTES
   cloud host are exploratory and are not headline numbers (methodology §6).
 - latency.hlog: values in ns, tags 'pipeline' (intended send -> ack observed) and 'engine'
   (inbound read -> ack written). *.hgrm: whole measurement window, values in µs.
+- Redaction: ${REDACTION_NOTE}
 NOTES
 
 echo "result directory: $OUT (exit $STATUS)"
