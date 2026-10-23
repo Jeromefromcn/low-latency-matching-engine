@@ -26,48 +26,16 @@ flowchart LR
     housekeeping --> prom["Prometheus summaries (monitoring only)"]
 ```
 
-The diagram is the target design. What exists today is described below.
+The diagram is the target design. **What exists today** — modules, threads, message flow, wire format, latency measurement, configuration, build and run modes — is described in [`docs/architecture.md`](docs/architecture.md), which is kept current with the code.
 
-## Repository layout
-
-| Path | Responsibility | Contents today |
-|---|---|---|
-| [`common/`](common/) | Wire format and constants shared by every module. SBE schemas and generated codecs arrive in ROADMAP 2.1. | `SkeletonProtocol` (placeholder 16-byte message layout), `LatencyRecording` (histogram range: 10 s, 3 significant digits) |
-| [`engine-core/`](engine-core/) | Order book and matching logic: a pure, single-threaded, deterministic state machine with no I/O, threads or clocks. | Empty until Phase 2 |
-| [`engine-app/`](engine-app/) | Process wiring: ring buffers, agent threads, idle strategies, CPU affinity, latency histograms, `.hlog` output. | Walking skeleton (see below) |
-| [`loadgen/`](loadgen/) | Open-model, constant-rate load generator. Latency is measured from each message's *intended* send time, so stalls are not hidden (coordinated omission). | `ConstantRateSchedule`, `LoadGeneratorAgent` |
-| [`bench-jmh/`](bench-jmh/) | JMH micro-benchmarks. | `BaselineBenchmark`: the JMH-infrastructure allocation floor that engine benchmarks are compared against |
-| [`build-logic/`](build-logic/) | Gradle convention plugins applied by every module: Java 25 toolchain, `-Xlint:all -Werror`, JUnit/jqwik, Spotless (palantir-java-format), JMH, Agrona JVM flags. | |
-| [`gradle/libs.versions.toml`](gradle/libs.versions.toml) | Every dependency version, in one place. | |
-| [`scripts/`](scripts/) | `run-skeleton.sh` (runs the skeleton); `platform/` holds machine tuning and noise-baseline scripts. | |
-| [`bench/`](bench/) | Committed raw evidence only: results generated deliberately to back a published claim. | |
-| [`docs/`](docs/) | Roadmap, benchmark methodology, ADRs, runbooks. | |
-
-### Walking skeleton (ROADMAP 0.4)
-
-One process, three threads, each an Agrona `Agent` with exactly one writer per piece of state:
-
-```mermaid
-flowchart LR
-    lg["loadgen thread<br/>LoadGeneratorAgent"] -- "new order<br/>(sequence, intended send time)" --> in[inbound ring<br/>OneToOneRingBuffer]
-    in --> eng["engine thread<br/>StubEngineAgent<br/>(ack only, no book)"]
-    eng -- "ack (same payload)" --> out[outbound ring<br/>OneToOneRingBuffer]
-    out --> lg
-    lg -. "pipeline latency" .-> rp[(recorder)]
-    eng -. "engine latency" .-> re[(recorder)]
-    rp --> hk["housekeeping thread<br/>HousekeepingAgent"]
-    re --> hk
-    hk --> files["latency.hlog<br/>pipeline.hgrm, engine.hgrm"]
-```
-
-| Class | Role |
+| Module | Responsibility |
 |---|---|
-| `SkeletonMain` | Entry point: parses the configuration, builds the rings and recorders, starts the three threads, waits for the run to finish. Exit code 0 completed, 1 configuration error, 2 `.hlog` truncated by its byte cap. |
-| `SkeletonConfig` | `key=value` arguments over a profile: `dev` (sleeping idle strategy, no pinning) or `bench` (busy-spin, core allocation from `CLAUDE.md`). Pinning arrives in ROADMAP 3.1; until then, requesting it fails at start-up. |
-| `LoadGeneratorAgent` | Sends every message that is due by the schedule; records *pipeline latency* = ack observed − intended send time. |
-| `StubEngineAgent` | Acknowledges each message; records *engine latency* = inbound read → ack written. Replaced by the real engine in 3.1. |
-| `HousekeepingAgent` | Discards warm-up samples, writes one interval per tag per log interval to `latency.hlog`, writes a `.hgrm` per tag at the end, and enforces the byte cap. |
-| `RunPlan` | Warm-up, measurement window, log interval and byte cap of one run. |
+| [`common/`](common/) | Wire format and constants shared by all modules |
+| [`engine-core/`](engine-core/) | Order book and matching: pure, deterministic, no I/O (Phase 2) |
+| [`engine-app/`](engine-app/) | Process wiring: ring buffers, threads, histograms, `.hlog` output |
+| [`loadgen/`](loadgen/) | Constant-rate load generator; latency from intended send time |
+| [`bench-jmh/`](bench-jmh/) | JMH micro-benchmarks |
+| [`build-logic/`](build-logic/) | Gradle conventions shared by every module |
 
 Key decisions are recorded as ADRs:
 

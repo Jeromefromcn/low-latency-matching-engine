@@ -17,6 +17,7 @@ The audience is engineers at Hong Kong banks and trading firms. Code, docs, comm
 
 | File | Purpose |
 |---|---|
+| `docs/architecture.md` | The system as it is now: modules, threads, message flow, formats, measurement points, configuration. Mermaid diagrams. |
 | `docs/ROADMAP.md` | Phased task list with acceptance criteria. Tasks are referenced by ID (e.g. `2.3`). |
 | `docs/benchmark-methodology.md` | The rules every benchmark must follow. |
 | `docs/adr/` | Architecture decisions. Read the relevant ADR before changing anything it covers. |
@@ -28,6 +29,7 @@ The audience is engineers at Hong Kong banks and trading firms. Code, docs, comm
 - Never start a task marked Conditional in `docs/ROADMAP.md` without explicit approval from the user in the current session.
 - Work on **one ROADMAP task at a time**. When a task is done and its acceptance criteria are verified, tick its checkbox in `docs/ROADMAP.md` in the same commit.
 - A task is not done until its acceptance criteria are **demonstrated**, not just implemented. If a criterion cannot be verified in the current environment (e.g. it needs the benchmark machine), say so explicitly and leave the box unticked.
+- `docs/architecture.md` describes the **current** state. Any change to what it describes (modules or their dependencies, threads and state ownership, message flow, wire formats or data layouts, measurement points, configuration, build/CI, run modes) updates it **in the same commit**. Planned parts go only in its "Not built yet" section. Diagrams are Mermaid; when a change touches the structure a diagram shows, update or add the diagram — never drop one without replacing it. Class-level detail belongs in code and Javadoc, not in the document.
 - Any new significant technical decision (library choice, threading model, data layout, protocol) gets a new ADR in `docs/adr/` using the next number. Do not silently reverse an existing ADR — write a new one that supersedes it.
 - **Ask before adding any new dependency.** The dependency list is deliberately small.
 - Commit messages: Conventional Commits (`feat(engine): ...`, `perf(book): ...`, `test(...)`, `docs(adr): ...`, `bench(...)`). Reference the ROADMAP ID in the body.
