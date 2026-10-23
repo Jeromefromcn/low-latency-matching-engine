@@ -35,7 +35,7 @@ Development-machine results follow `docs/benchmark-methodology.md` §6: labelled
 - [x] **0.2 CI**
   - GitHub Actions: build + unit tests on every push.
   - ✅ Green badge in README.
-- [ ] **0.3 Code style**
+- [x] **0.3 Code style**
   - Formatter (e.g. Spotless) wired into the build.
   - ✅ `./gradlew spotlessCheck` runs in CI.
 - [ ] **0.4 Walking skeleton (end-to-end, no matching logic)**
