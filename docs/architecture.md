@@ -6,7 +6,7 @@ This document describes the system **as it is now**, not as it is planned. It is
 - **What comes next**: [`docs/ROADMAP.md`](ROADMAP.md). Planned parts appear here only in [§10 Not built yet](#10-not-built-yet), never mixed into the description of what exists.
 - **How to measure**: [`docs/benchmark-methodology.md`](benchmark-methodology.md).
 
-**Current as of:** ROADMAP Phase 0 complete (0.1–0.4). Walking skeleton only; there is no order book or matching logic yet.
+**Current as of:** ROADMAP 2.1. Walking skeleton plus the engine's SBE message schema and codecs; there is no order book or matching logic yet, and the skeleton does not use the codecs yet.
 
 Contents:
 
@@ -47,7 +47,7 @@ flowchart LR
 
 | Module | Responsibility | Contents today |
 |---|---|---|
-| `common` | Wire format and constants shared by all modules. SBE schemas and codecs from ROADMAP 2.1. | `SkeletonProtocol` (placeholder message layout), `LatencyRecording` (histogram range) |
+| `common` | Wire format and constants shared by all modules. | SBE schema and generated codecs (§5, ADR 0005); `SkeletonProtocol` (placeholder layout, still used by the skeleton); `LatencyRecording` (histogram range) |
 | `engine-core` | Order book and matching: a pure, single-threaded, deterministic state machine `(state, event) -> (state', events)`. No I/O, threads or clocks. | Empty |
 | `engine-app` | Process wiring: rings, threads, idle strategies, affinity, recorders, `.hlog` output. | Walking skeleton |
 | `loadgen` | Open-model, constant-rate load generation; latency from intended send time. | `ConstantRateSchedule`, `LoadGeneratorAgent` |
@@ -72,10 +72,12 @@ flowchart BT
     jmh -->|jmh source set| core
 
     agrona(["Agrona"])
+    sbe(["sbe-tool<br/>(build time only)"])
     hdr(["HdrHistogram"])
     aeron(["Aeron client + driver<br/>(declared, not used yet)"])
 
     common -->|api| agrona
+    common -.->|generateSbeCodecs| sbe
     lg --> hdr
     app --> hdr
     app --> aeron
@@ -84,6 +86,7 @@ flowchart BT
 Notes:
 
 - `engine-app` depends on `loadgen` only because the skeleton runs the load generator in the same process. ROADMAP 3.4 moves it into its own process (pinned to CPU 1).
+- `sbe-tool` is on a build-only configuration (`sbeCodegen`) of `common`; it is not on any compile or runtime classpath. The generated codecs need only Agrona.
 - `engine-core` has no dependency on Aeron, HdrHistogram or anything thread- or clock-related; it reaches Agrona only for buffers and primitive collections.
 
 ## 3. Threads and state ownership
@@ -168,9 +171,57 @@ Back-pressure behaviour:
 
 ## 5. Wire format and ring buffers
 
+Two formats exist today. The skeleton still exchanges the placeholder layout; the SBE schema defines the engine's real boundary and replaces the placeholder on the ring buffers in ROADMAP 3.1.
+
+### Engine messages (SBE)
+
+Schema `common/src/main/sbe/matching-schema.xml` (schema id 1, version 0, little-endian). Design and evolution rules: ADR 0005. Codecs are generated into `common/build/generated/sources/sbe` (package `io.github.jeromefromcn.matching.common.sbe`) by the `generateSbeCodecs` task on every build; they are not committed.
+
+| Template id | Message | Direction | Body (bytes) | Fields, in wire order |
+|---|---|---|---|---|
+| 1 | `NewOrder` | inbound | 47 | clientOrderId, accountId, timestamp, price, quantity, instrumentId, side, ordType, timeInForce |
+| 2 | `CancelOrder` | inbound | 36 | clientOrderId, orderId, accountId, timestamp, instrumentId |
+| 10 | `OrderAccepted` | outbound | 53 | orderId, clientOrderId, accountId, timestamp, price, quantity, instrumentId, side |
+| 11 | `OrderRejected` | outbound | 29 | clientOrderId, accountId, timestamp, instrumentId, reason |
+| 12 | `Trade` | outbound | 53 | tradeId, buyOrderId, sellOrderId, timestamp, price, quantity, instrumentId, aggressorSide |
+| 13 | `OrderCancelled` | outbound | 37 | orderId, clientOrderId, timestamp, cancelledQuantity, instrumentId, reason |
+| 14 | `CancelRejected` | outbound | 37 | clientOrderId, orderId, accountId, timestamp, instrumentId, reason |
+
+Every message is an 8-byte header followed by a fixed-size body. Fields are ordered widest first, so each is naturally aligned and the body has no padding; enums are `uint8` with values starting at 1. Example, `NewOrder`:
+
+```mermaid
+flowchart LR
+    subgraph hdr["header 8 B"]
+        direction LR
+        h1["blockLength<br/>u16"] --- h2["templateId<br/>u16"] --- h3["schemaId<br/>u16"] --- h4["version<br/>u16"]
+    end
+    subgraph body["NewOrder body 47 B"]
+        direction LR
+        b1["0 clientOrderId<br/>i64"] --- b2["8 accountId<br/>i64"] --- b3["16 timestamp<br/>i64"] --- b4["24 price<br/>i64"] --- b5["32 quantity<br/>i64"] --- b6["40 instrumentId<br/>i32"] --- b7["44 side<br/>u8"] --- b8["45 ordType<br/>u8"] --- b9["46 timeInForce<br/>u8"]
+    end
+    hdr --- body
+```
+
+Lifecycle of the events one order can produce (`OrderRejected` and `OrderCancelled` are terminal; an order is also finished when its trades sum to its quantity; `CancelRejected` leaves the target order unchanged):
+
+```mermaid
+stateDiagram-v2
+    [*] --> Rejected: NewOrder invalid<br/>OrderRejected (no orderId)
+    [*] --> Open: NewOrder valid<br/>OrderAccepted (orderId assigned)
+    Open --> Open: Trade (partial fill)
+    Open --> Filled: Trade (open quantity reaches 0)
+    Open --> Cancelled: OrderCancelled<br/>(client request, IOC/market remainder,<br/>FOK not fillable, self-trade prevention)
+    Open --> Open: CancelOrder refused<br/>CancelRejected
+    Rejected --> [*]
+    Filled --> [*]
+    Cancelled --> [*]
+```
+
+Which `OrdType` × `TimeInForce` combinations are valid and how each one matches is defined by the matching logic (ROADMAP 2.3), not by the schema.
+
 ### Placeholder message layout (`SkeletonProtocol`)
 
-Replaced by SBE in ROADMAP 2.1. Both message types carry the same payload; the ack echoes it unchanged.
+Used by the walking skeleton until ROADMAP 3.1. Both message types carry the same payload; the ack echoes it unchanged.
 
 | Offset | Length | Field | Type |
 |---|---|---|---|
@@ -316,13 +367,15 @@ Every module applies a convention plugin from `build-logic`; versions live in `g
 flowchart TB
     cat[("gradle/libs.versions.toml")] --> jc
     cat --> jm
-    jc["mle.java-conventions<br/>Java 25 toolchain and release<br/>-Xlint:all -Werror<br/>JUnit 5 + jqwik<br/>Spotless: palantir-java-format<br/>Agrona JVM flags on tests"]
+    jc["mle.java-conventions<br/>Java 25 toolchain and release<br/>-Xlint:all -Werror<br/>JUnit 5 + jqwik<br/>Spotless: palantir-java-format (src/ only)<br/>Agrona JVM flags on tests"]
     jm["mle.jmh-conventions<br/>JMH 1.37, JSON results<br/>Agrona JVM flags on forks<br/>assemble compiles JMH sources"]
-    jc --> m1["common"] & m2["engine-core"] & m3["engine-app<br/>+ application plugin"] & m4["loadgen"]
+    jc --> m1["common<br/>+ generateSbeCodecs (sbe-tool)"] & m2["engine-core"] & m3["engine-app<br/>+ application plugin"] & m4["loadgen"]
     jc --> jm --> m5["bench-jmh"]
 ```
 
-Agrona 2.x needs `--add-exports java.base/jdk.internal.misc=ALL-UNNAMED`. `AgronaJvmArgs` holds the flag once; it is applied to tests, JMH forks and the `engine-app` start script.
+Agrona 2.x needs `--add-exports java.base/jdk.internal.misc=ALL-UNNAMED`. `AgronaJvmArgs` holds the flag once; it is applied to tests, JMH forks, the `sbe-tool` run and the `engine-app` start script.
+
+SBE codecs: `common:generateSbeCodecs` runs `SbeTool` on the toolchain JVM with schema warnings fatal, deletes its output directory first (no stale codecs), and is registered as a source directory of `common`'s main source set, so `compileJava` depends on it. Spotless formats `src/**/*.java` only, never generated code.
 
 ### CI
 
@@ -363,13 +416,13 @@ flowchart LR
     outbound --> lg
     hk["housekeeping<br/>.hlog writer"]
 
-    sbe["SBE codecs (2.1)"]:::todo
     book["order book + matching (2.2–2.3)"]:::todo
     pin["CPU pinning (3.1)"]:::todo
     journal["journal + replay (3.2)"]:::todo
     stages["per-stage timestamps (3.3)"]:::todo
     prom["Prometheus export + Grafana (3.5)"]:::todo
 
+    sbe["SBE codecs on the rings (3.1)<br/>codecs exist (2.1)"]:::todo
     sbe -.-> engine
     book -.-> engine
     pin -.-> engine
@@ -391,6 +444,9 @@ flowchart LR
 | Exceeding the byte cap fails the run with a marker | `HousekeepingAgentTest`, `SkeletonMainTest` (exit 2) |
 | Requested pinning is never silently ignored | `SkeletonConfigTest`, `SkeletonMainTest` (exit 1) |
 | Tests run on Java 25 with JUnit and jqwik both active | `BuildWiringTest` |
+| Every SBE message round-trips with all fields intact and writes exactly its encoded length | `CodecRoundTripTest` (jqwik, all messages) |
+| SBE fields naturally aligned, no gaps; enums never 0; template-id ranges; block lengths unchanged | `WireLayoutTest` |
+| Schema warnings fail the build | `generateSbeCodecs` (`sbe.validation.warnings.fatal`) |
 | Formatting and compiler warnings | `spotlessCheck` and `-Werror` in every build and in CI |
 | `engine-core` has no Aeron, thread or clock dependency | Build file only (no Aeron/HdrHistogram declared). An automated dependency/ArchUnit test arrives with ROADMAP 3.5. |
 | Zero allocation on the hot path | Code review against `docs/zero-allocation.md` only. Not yet demonstrated: JMH `-prof gc` arrives in 2.7/3.1, GC-free steady state in 3.6. |

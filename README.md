@@ -43,6 +43,7 @@ Key decisions are recorded as ADRs:
 - [0002 — In-process ring buffers / Aeron instead of Kafka on the message path](docs/adr/0002-aeron-ipc-over-kafka.md)
 - [0003 — Gradle first, Maven parity later](docs/adr/0003-build-tool-gradle-first.md)
 - [0004 — Hot-path processes run on bare metal, not in containers](docs/adr/0004-deployment-bare-metal-hot-path.md)
+- [0005 — Engine message schema (SBE)](docs/adr/0005-sbe-message-schema.md)
 
 ## Results
 
