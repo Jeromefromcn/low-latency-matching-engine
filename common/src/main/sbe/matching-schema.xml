@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Engine wire format (ROADMAP 2.1, ADR 0005).
+
+  Conventions:
+  - Prices are int64 ticks, quantities int64 units. No floating point anywhere.
+  - All identifiers and quantities are signed int64: Java has no unsigned long, and a signed field
+    makes "negative quantity" a value the engine can see and reject instead of a huge positive number.
+  - Fixed-size fields only, ordered widest first (8-byte, then 4-byte, then 1-byte) so every field is
+    naturally aligned within the block.
+  - Enum values start at 1: an all-zero (uninitialised) buffer never decodes as a valid side, type or reason.
+  - timestamp is supplied upstream (gateway / sequencer) and copied onto every event the message causes.
+    The engine never reads a clock, so replaying the same inbound stream yields the same outbound stream.
+  - clientOrderId on an event is always the clientOrderId of the inbound request that caused it.
+  - Template ids 1-9 are inbound requests, 10-19 outbound events.
+-->
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   package="io.github.jeromefromcn.matching.common.sbe"
+                   id="1"
+                   version="0"
+                   semanticVersion="0.1"
+                   description="Matching engine requests and events"
+                   byteOrder="littleEndian">
+    <types>
+        <composite name="messageHeader" description="Precedes every message">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+
+        <type name="OrderId" primitiveType="int64" description="Assigned by the engine on acceptance"/>
+        <type name="ClientOrderId" primitiveType="int64" description="Opaque to the engine; echoed on events"/>
+        <type name="TradeId" primitiveType="int64" description="Assigned by the engine per trade"/>
+        <type name="AccountId" primitiveType="int64"/>
+        <type name="InstrumentId" primitiveType="int32"/>
+        <type name="Price" primitiveType="int64" description="Ticks"/>
+        <type name="Quantity" primitiveType="int64"/>
+        <type name="Timestamp" primitiveType="int64" description="Nanoseconds since the Unix epoch, set upstream"/>
+
+        <enum name="Side" encodingType="uint8">
+            <validValue name="BUY">1</validValue>
+            <validValue name="SELL">2</validValue>
+        </enum>
+        <enum name="OrdType" encodingType="uint8">
+            <validValue name="LIMIT">1</validValue>
+            <validValue name="MARKET">2</validValue>
+        </enum>
+        <enum name="TimeInForce" encodingType="uint8">
+            <validValue name="DAY" description="Rests until filled or cancelled">1</validValue>
+            <validValue name="IOC" description="Immediate or cancel: fill what is possible, cancel the rest">2</validValue>
+            <validValue name="FOK" description="Fill or kill: fill completely at once, or not at all">3</validValue>
+        </enum>
+        <enum name="RejectReason" encodingType="uint8">
+            <validValue name="UNKNOWN_INSTRUMENT">1</validValue>
+            <validValue name="INVALID_SIDE">2</validValue>
+            <validValue name="INVALID_ORD_TYPE">3</validValue>
+            <validValue name="INVALID_TIME_IN_FORCE">4</validValue>
+            <validValue name="INVALID_PRICE">5</validValue>
+            <validValue name="PRICE_OUT_OF_RANGE" description="Outside the book's configured tick range">6</validValue>
+            <validValue name="INVALID_QUANTITY">7</validValue>
+            <validValue name="BOOK_FULL" description="Pre-sized order capacity exhausted">8</validValue>
+        </enum>
+        <enum name="CancelReason" encodingType="uint8">
+            <validValue name="CLIENT_REQUEST">1</validValue>
+            <validValue name="UNFILLED_REMAINDER" description="IOC or market order could not fill completely">2</validValue>
+            <validValue name="FOK_NOT_FILLABLE">3</validValue>
+            <validValue name="SELF_TRADE_PREVENTION">4</validValue>
+        </enum>
+        <enum name="CancelRejectReason" encodingType="uint8">
+            <validValue name="UNKNOWN_ORDER" description="Never existed or already terminal">1</validValue>
+            <validValue name="NOT_OWNER">2</validValue>
+        </enum>
+    </types>
+
+    <!-- Inbound requests -->
+
+    <sbe:message name="NewOrder" id="1" description="price must be > 0 for LIMIT and is ignored for MARKET">
+        <field name="clientOrderId" id="1" type="ClientOrderId"/>
+        <field name="accountId" id="2" type="AccountId"/>
+        <field name="timestamp" id="3" type="Timestamp"/>
+        <field name="price" id="4" type="Price"/>
+        <field name="quantity" id="5" type="Quantity"/>
+        <field name="instrumentId" id="6" type="InstrumentId"/>
+        <field name="side" id="7" type="Side"/>
+        <field name="ordType" id="8" type="OrdType"/>
+        <field name="timeInForce" id="9" type="TimeInForce"/>
+    </sbe:message>
+
+    <sbe:message name="CancelOrder" id="2">
+        <field name="clientOrderId" id="1" type="ClientOrderId" description="Of this cancel request"/>
+        <field name="orderId" id="2" type="OrderId" description="Order to cancel"/>
+        <field name="accountId" id="3" type="AccountId"/>
+        <field name="timestamp" id="4" type="Timestamp"/>
+        <field name="instrumentId" id="5" type="InstrumentId"/>
+    </sbe:message>
+
+    <!-- Outbound events -->
+
+    <sbe:message name="OrderAccepted" id="10">
+        <field name="orderId" id="1" type="OrderId"/>
+        <field name="clientOrderId" id="2" type="ClientOrderId"/>
+        <field name="accountId" id="3" type="AccountId"/>
+        <field name="timestamp" id="4" type="Timestamp"/>
+        <field name="price" id="5" type="Price"/>
+        <field name="quantity" id="6" type="Quantity"/>
+        <field name="instrumentId" id="7" type="InstrumentId"/>
+        <field name="side" id="8" type="Side"/>
+    </sbe:message>
+
+    <sbe:message name="OrderRejected" id="11" description="Terminal; the order never received an orderId">
+        <field name="clientOrderId" id="1" type="ClientOrderId"/>
+        <field name="accountId" id="2" type="AccountId"/>
+        <field name="timestamp" id="3" type="Timestamp"/>
+        <field name="instrumentId" id="4" type="InstrumentId"/>
+        <field name="reason" id="5" type="RejectReason"/>
+    </sbe:message>
+
+    <sbe:message name="Trade" id="12">
+        <field name="tradeId" id="1" type="TradeId"/>
+        <field name="buyOrderId" id="2" type="OrderId"/>
+        <field name="sellOrderId" id="3" type="OrderId"/>
+        <field name="timestamp" id="4" type="Timestamp"/>
+        <field name="price" id="5" type="Price" description="Resting order's price"/>
+        <field name="quantity" id="6" type="Quantity"/>
+        <field name="instrumentId" id="7" type="InstrumentId"/>
+        <field name="aggressorSide" id="8" type="Side"/>
+    </sbe:message>
+
+    <sbe:message name="OrderCancelled" id="13" description="Terminal">
+        <field name="orderId" id="1" type="OrderId"/>
+        <field name="clientOrderId" id="2" type="ClientOrderId"/>
+        <field name="timestamp" id="3" type="Timestamp"/>
+        <field name="cancelledQuantity" id="4" type="Quantity" description="Open quantity removed by this cancel"/>
+        <field name="instrumentId" id="5" type="InstrumentId"/>
+        <field name="reason" id="6" type="CancelReason"/>
+    </sbe:message>
+
+    <sbe:message name="CancelRejected" id="14" description="Not terminal for the target order: it stays as it was">
+        <field name="clientOrderId" id="1" type="ClientOrderId"/>
+        <field name="orderId" id="2" type="OrderId"/>
+        <field name="accountId" id="3" type="AccountId"/>
+        <field name="timestamp" id="4" type="Timestamp"/>
+        <field name="instrumentId" id="5" type="InstrumentId"/>
+        <field name="reason" id="6" type="CancelRejectReason"/>
+    </sbe:message>
+</sbe:messageSchema>

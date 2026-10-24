@@ -18,6 +18,8 @@ java {
 
 spotless {
     java {
+        // Hand-written sources only; generated code (e.g. SBE codecs under build/) is not ours to format.
+        target("src/**/*.java")
         palantirJavaFormat(libs.findVersion("palantir-java-format").get().requiredVersion)
         trimTrailingWhitespace()
         endWithNewline()
